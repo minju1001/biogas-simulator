@@ -1,82 +1,88 @@
 import streamlit as st
 
 # 대표값 예시
-food_c_n = 14.81
-sludge_c_n = 6.1
-pig_c_n = 16.0
-cow_c_n = 20.0
+def get_cn_and_ph(material):
+    cn_map = {
+        "음식물 폐기물": 14.81,
+        "하수슬러지": 6.1,
+        "돈분": 16.0,
+        "우분": 20.0
+    }
+    ph_map = {
+        "음식물 폐기물": 4.2,
+        "하수슬러지": 7.63,
+        "돈분": 7.25,
+        "우분": 7.25
+    }
+    return cn_map[material], ph_map[material]
 
-food_pH = 4.2
-sludge_pH = 7.63
-pig_pH = 7.25
-cow_pH = 7.25
+st.title("바이오가스화 최적혼합비율 설계 시뮬레이터")
 
-st.title("🌿 바이오가스 혼합 설계 시뮬레이터")
+# 도/시군 선택
+do_options = [
+    "서울특별시", "부산광역시", "인천광역시", "대구광역시", "대전광역시", "광주광역시",
+    "울산광역시", "세종특별자치시", "경기도", "충청북도", "충청남도", "전라남도",
+    "경상북도", "경상남도", "강원특별자치도", "전북특별자치도", "제주특별자치도"
+]
+si_gun_options = [
+    "춘천시", "청주시", "천안시", "전주시", "목포시", "수원시", "성남시", "제주시",
+    "서귀포시", "부산진구", "동래구", "중구", "의정부시", "포항시", "안동시",
+    "광주시", "강릉시", "원주시", "군산시", "여수시", "순천시", "김해시"
+]
 
-st.write("지역/계절/기질 선택을 통해 혼합비에 따른 발효 안정성을 예측합니다.")
+do = st.selectbox("1차: 도 단위 선택 (필수)", do_options)
+si_gun = st.selectbox("2차: 시/군 단위 선택 (선택)", ["(선택 안 함)"] + si_gun_options)
 
-# 사용자 입력
-location = st.text_input("지역 입력 (예: 춘천시, 청주시 등)")
 season = st.selectbox("계절 선택", ["봄", "여름", "가을", "겨울"])
-
 materials = st.multiselect("혼합 기질 선택", ["음식물 폐기물", "하수슬러지", "돈분", "우분"])
-custom_ratio = st.text_input("혼합 비율 입력 (예: 음식물 60, 슬러지 40) / 미입력 시 자동 제안")
+custom_ratio = st.text_input("혼합 비율 입력 (예: 음식물 60, 슬러지 40) / 미입력 시 자동 계산")
 
-# 계산 버튼
 if st.button("시뮬레이션 실행"):
-    st.subheader("✅ 혼합 결과 예측")
-    
-    if not materials:
+    st.subheader("혼합 비율 및 결과 예측")
+    if len(materials) < 2:
         st.warning("기질을 최소 2개 이상 선택해주세요!")
     else:
-        # 혼합비 계산
         if custom_ratio:
-            # 수동 입력값 처리
             try:
                 parts = [float(x.strip()) for x in custom_ratio.split(",")]
                 if len(parts) != len(materials):
-                    st.error("혼합비 개수가 기질 선택 수와 맞지 않습니다!")
+                    st.error("혼합비 개수가 기질 수와 맞지 않습니다!")
+                    parts = None
                 else:
                     total = sum(parts)
                     ratios = [x / total for x in parts]
             except:
-                st.error("혼합비 입력 형식이 잘못되었습니다. 예: 60, 40")
+                st.error("혼합비 입력 형식 오류. 예: 60, 40")
                 ratios = None
         else:
-            # 비율 미입력 → 자동 균등 배분
-            ratios = [1 / len(materials)] * len(materials)
+            # 자동 혼합 비 제안 (C/N = 20 기준으로 맞추기 위한 간단한 가중치 예시)
+            cn_targets = [get_cn_and_ph(m)[0] for m in materials]
+            inverse_diff = [1 / abs(20 - cn) for cn in cn_targets]
+            total = sum(inverse_diff)
+            ratios = [x / total for x in inverse_diff]
+            st.info("혼합비 미입력: 자동 제안 혼합비 적용")
+            st.write("**제안 혼합비:**")
+            for i in range(len(materials)):
+                st.write(f"{materials[i]}: {ratios[i]*100:.1f}%")
 
         if ratios:
-            # 기질별 C/N, pH 매핑
-            cn_map = {
-                "음식물 폐기물": food_c_n,
-                "하수슬러지": sludge_c_n,
-                "돈분": pig_c_n,
-                "우분": cow_c_n
-            }
-            ph_map = {
-                "음식물 폐기물": food_pH,
-                "하수슬러지": sludge_pH,
-                "돈분": pig_pH,
-                "우분": cow_pH
-            }
+            mix_cn = sum([ratios[i] * get_cn_and_ph(materials[i])[0] for i in range(len(materials))])
+            mix_pH = sum([ratios[i] * get_cn_and_ph(materials[i])[1] for i in range(len(materials))])
 
-            mix_cn = sum([ratios[i] * cn_map[materials[i]] for i in range(len(materials))])
-            mix_pH = sum([ratios[i] * ph_map[materials[i]] for i in range(len(materials))])
-
-            st.write(f"**혼합 C/N 비율:** {mix_cn:.2f}")
+            st.write(f"\n**혼합 C/N 비율:** {mix_cn:.2f}")
             st.write(f"**혼합 pH:** {mix_pH:.2f}")
 
-            # 판정 메시지
             if mix_cn < 15:
-                st.warning("C/N 비가 낮습니다 → 탄소원 보완 필요")
+                st.warning(f"C/N 비가 낮습니다 → 탄소원 보완 필요 (예: 곡류류). 목표: 20~25")
             elif mix_cn > 30:
-                st.warning("C/N 비가 너무 높습니다 → 질소원 보완 필요")
+                st.warning(f"C/N 비가 높습니다 → 질소원 보완 필요 (예: 슬러지). 목표: 20~25")
             else:
-                st.success("C/N 비 적정 범위입니다")
+                st.success("C/N 비 적정 범위입니다 (15~30)")
 
-            if mix_pH < 6.5 or mix_pH > 8.5:
-                st.warning("pH 범위가 불안정합니다 → 슬러지/알칼리제 조절 필요")
+            if mix_pH < 6.5:
+                st.warning(f"pH가 낮습니다 → 알칼리성 기질 추가 필요 (예: 슬러지). 목표 pH: 6.5~8.5")
+            elif mix_pH > 8.5:
+                st.warning(f"pH가 높습니다 → 산성 보조기질 필요. 목표 pH: 6.5~8.5")
             else:
-                st.success("pH 안정 범위입니다")
+                st.success("pH 안정 범위입니다 (6.5~8.5)")
 
