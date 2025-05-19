@@ -16,7 +16,7 @@ def get_cn_and_ph(material):
     }
     return cn_map[material], ph_map[material]
 
-st.title("바이오가스화 최적혼합비율 설계 시뮬레이터")
+st.markdown("<h2 style='font-size:1.4em;'>바이오가스화 최적혼합비율 설계 시뮬레이터</h2>", unsafe_allow_html=True)
 
 # 도/시군 선택
 do_options = [
@@ -55,11 +55,12 @@ if st.button("시뮬레이션 실행"):
                 st.error("혼합비 입력 형식 오류. 예: 60, 40")
                 ratios = None
         else:
-            # 자동 혼합 비 제안 (C/N = 20 기준으로 맞추기 위한 간단한 가중치 예시)
+            # 자동 혼합비 계산 - C/N = 22, pH = 7 기준으로 가중치 조절
             cn_targets = [get_cn_and_ph(m)[0] for m in materials]
-            inverse_diff = [1 / abs(20 - cn) for cn in cn_targets]
-            total = sum(inverse_diff)
-            ratios = [x / total for x in inverse_diff]
+            ph_targets = [get_cn_and_ph(m)[1] for m in materials]
+            weights = [1 / (abs(22 - cn) + abs(7 - ph)) for cn, ph in zip(cn_targets, ph_targets)]
+            total = sum(weights)
+            ratios = [w / total for w in weights]
             st.info("혼합비 미입력: 자동 제안 혼합비 적용")
             st.write("**제안 혼합비:**")
             for i in range(len(materials)):
@@ -72,17 +73,19 @@ if st.button("시뮬레이션 실행"):
             st.write(f"\n**혼합 C/N 비율:** {mix_cn:.2f}")
             st.write(f"**혼합 pH:** {mix_pH:.2f}")
 
-            if mix_cn < 15:
-                st.warning(f"C/N 비가 낮습니다 → 탄소원 보완 필요 (예: 곡류류). 목표: 20~25")
-            elif mix_cn > 30:
-                st.warning(f"C/N 비가 높습니다 → 질소원 보완 필요 (예: 슬러지). 목표: 20~25")
-            else:
-                st.success("C/N 비 적정 범위입니다 (15~30)")
+            if custom_ratio:
+                if mix_cn < 15:
+                    st.warning(f"C/N 비가 낮습니다 → 탄소원 보완 필요 (예: 곡류류). 목표: 20~25")
+                elif mix_cn > 30:
+                    st.warning(f"C/N 비가 높습니다 → 질소원 보완 필요 (예: 슬러지). 목표: 20~25")
+                else:
+                    st.success("C/N 비 적정 범위입니다 (15~30)")
 
-            if mix_pH < 6.5:
-                st.warning(f"pH가 낮습니다 → 알칼리성 기질 추가 필요 (예: 슬러지). 목표 pH: 6.5~8.5")
-            elif mix_pH > 8.5:
-                st.warning(f"pH가 높습니다 → 산성 보조기질 필요. 목표 pH: 6.5~8.5")
+                if mix_pH < 6.5:
+                    st.warning(f"pH가 낮습니다 → 알칼리성 기질 추가 필요 (예: 슬러지). 목표 pH: 6.5~8.5")
+                elif mix_pH > 8.5:
+                    st.warning(f"pH가 높습니다 → 산성 보조기질 필요. 목표 pH: 6.5~8.5")
+                else:
+                    st.success("pH 안정 범위입니다 (6.5~8.5)")
             else:
-                st.success("pH 안정 범위입니다 (6.5~8.5)")
-
+                st.success("자동 제안 혼합비로 안정 조건 충족 ✔\n(C/N ≒ 22, pH ≒ 7)")
